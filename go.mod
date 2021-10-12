@@ -1,4 +1,4 @@
-module github.com/justone/pod-babashka-archiver
+module github.com/justone/pod-justone-archiver
 
 go 1.17
 
