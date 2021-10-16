@@ -8,6 +8,23 @@ import (
 	"github.com/mholt/archiver/v3"
 )
 
+type opts struct {
+	OverwriteExisting bool `json:"overwrite-existing"`
+}
+
+var defaultOpts = opts{true}
+
+func setOverwrite(a interface{}, overwriteExisting bool) {
+	switch v := a.(type) {
+	case *archiver.TarGz:
+		v.OverwriteExisting = overwriteExisting
+	case *archiver.Zip:
+		v.OverwriteExisting = overwriteExisting
+	case *archiver.FileCompressor:
+		v.OverwriteExisting = overwriteExisting
+	}
+}
+
 func ProcessMessage(message *babashka.Message) (interface{}, error) {
 	switch message.Op {
 	case "describe":
@@ -45,12 +62,41 @@ func ProcessMessage(message *babashka.Message) (interface{}, error) {
 
 			return true, archiver.Archive(sources, dest)
 		case "pod.archiver/unarchive":
-			var args []string
+			args := []json.RawMessage{}
 			if err := json.Unmarshal([]byte(message.Args), &args); err != nil {
 				return nil, err
 			}
 
-			return true, archiver.Unarchive(args[0], args[1])
+			var src string
+			if err := json.Unmarshal([]byte(args[0]), &src); err != nil {
+				return nil, err
+			}
+
+			var dest string
+			if err := json.Unmarshal([]byte(args[1]), &dest); err != nil {
+				return nil, err
+			}
+
+			o := defaultOpts
+			if len(args) == 3 {
+				if err := json.Unmarshal([]byte(args[2]), &o); err != nil {
+					return nil, err
+				}
+			}
+			// fmt.Fprintf(os.Stderr, "%+v\n", o)
+
+			a, err := archiver.ByExtension(src)
+			if err != nil {
+				return nil, err
+			}
+			// fmt.Fprintf(os.Stderr, "%+v\n", a.(*archiver.TarGz).OverwriteExisting)
+			// a.(*archiver.TarGz).OverwriteExisting = true
+			// fmt.Fprintf(os.Stderr, "%+v\n", a.(*archiver.TarGz).OverwriteExisting)
+			// fmt.Fprintf(os.Stderr, "%+v\n", a.(*archiver.TarGz))
+			setOverwrite(a, o.OverwriteExisting)
+			// fmt.Fprintf(os.Stderr, "%+v\n", a.(*archiver.TarGz).OverwriteExisting)
+
+			return true, a.(archiver.Unarchiver).Unarchive(src, dest)
 		case "pod.archiver/extract":
 			var args []string
 			if err := json.Unmarshal([]byte(message.Args), &args); err != nil {
@@ -66,12 +112,42 @@ func ProcessMessage(message *babashka.Message) (interface{}, error) {
 
 			return true, archiver.CompressFile(args[0], args[1])
 		case "pod.archiver/decompress-file":
-			var args []string
+			args := []json.RawMessage{}
 			if err := json.Unmarshal([]byte(message.Args), &args); err != nil {
 				return nil, err
 			}
 
-			return true, archiver.DecompressFile(args[0], args[1])
+			var src string
+			if err := json.Unmarshal([]byte(args[0]), &src); err != nil {
+				return nil, err
+			}
+
+			var dest string
+			if err := json.Unmarshal([]byte(args[1]), &dest); err != nil {
+				return nil, err
+			}
+
+			o := defaultOpts
+			if len(args) == 3 {
+				if err := json.Unmarshal([]byte(args[2]), &o); err != nil {
+					return nil, err
+				}
+			}
+
+			a, err := archiver.ByExtension(src)
+			if err != nil {
+				return nil, err
+			}
+			// fmt.Fprintf(os.Stderr, "%+v\n", a.OverwriteExisting)
+			c := &archiver.FileCompressor{Compressor: a.(archiver.Compressor), Decompressor: a.(archiver.Decompressor)}
+
+			setOverwrite(c, o.OverwriteExisting)
+			// fmt.Fprintf(os.Stderr, "%+v\n", o.OverwriteExisting)
+			// fmt.Fprintf(os.Stderr, "%+v\n", reflect.TypeOf(o))
+			// fmt.Fprintf(os.Stderr, "%+v\n", c.OverwriteExisting)
+			// fmt.Fprintf(os.Stderr, "%+v\n", reflect.TypeOf(c))
+
+			return true, c.DecompressFile(src, dest)
 		default:
 			return nil, fmt.Errorf("Unknown var %s", message.Var)
 		}
