@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/babashka/pod-babashka-fswatcher/babashka"
+	"github.com/justone/pod-justone-archiver/babashka"
 	"github.com/mholt/archiver/v3"
 )
 
@@ -74,7 +74,10 @@ func processMessage(message *babashka.Message) (interface{}, error) {
 				{
 					Name: "pod.archiver",
 					Vars: []babashka.Var{
-						{Name: "archive"},
+						{
+							Name: "archive",
+							Meta: "{:name \"archive\", :doc \"Create an archive, combining all the sources into the destination. The type\\n  of archive is determined by the destination extension.\", :arglists ([sources destination opts])}",
+						},
 						{Name: "unarchive"},
 						{Name: "extract"},
 						{Name: "compress-file"},
